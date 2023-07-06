@@ -2,9 +2,11 @@
 #include "raymath.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define clamp(a, b, c) (max(b, min(a, c)))
+#define TRAIL_LEN 1000000 // 1 million
 // I build with cc nbody_chart.c -O3 -Wall -Wextra -pedantic -ffast-math -funsafe-math-optimizations -l:libraylib.a -lm -pthread -o nbody_chart
 
 // more "deterministic" than sim
@@ -84,12 +86,20 @@
 // semi major axis can be found by max dist from barycentre
 // period can be found by time to start pos within epsilon e.g. (in AU) 1e-6
 
+typedef struct CircularArray {
+    size_t len;
+    size_t pos;
+    size_t start;
+    Vector3 *data;
+} CircularArray;
+
 typedef struct Body {
     // probably should use SI units I guess
     float a;           // semi major axis
     float b;           // semi minor axis
     float e;           // eccentricity
     float inclination; // inclination in degrees/radians?
+    CircularArray trail;// array of vec3s for trail
     Vector3 pos;
     double radius;
     double theta;
@@ -98,17 +108,17 @@ typedef struct Body {
     Color color; // maybe later add texture, atmosphere, etc.
 } Body;
 
-typedef Body Planet;
+
+typedef Body Planet; // "OOP"
 
 #define BODYCNT 11
 int main() {
-    static const float scale = 1e-3;
-    static const float radScale = 1;
-    static const float AU = 1.496e11 * scale; // delta of 1e4
+    const float scale = 1e-3;
+    const float radScale = 1;
+    const float AU = 1.496e11 * scale; // delta of 1e4
     float dt = 10000.;                        // DT of 10000 = 3hrs per frame, ~week per second
-    float currTime = 0;
-    static const float TIMELIM = 3600. * 24. * 365.; // 1 year
-    static const size_t subLim = 10;                 // steps per frame
+    const float TIMELIM = 3600. * 24. * 365.; // 1 year
+    const size_t subLim = 10;                 // steps per frame
     float remap = 5e-6;
     float mult = 0;
     int labels = 1;
@@ -170,7 +180,7 @@ int main() {
     };
     Body phobos = {
         .name = "Phobos",
-        .a = 9.378e7 * scale * 500, // not to scale; hand tuned because planetary radius was inflated
+        .a = 9.378e7 * scale * 50, // not to scale; hand tuned because planetary radius was inflated
         .e = 0,
         .radius = 1.1267e4 * 10,
         .color = GRAY,
@@ -178,7 +188,7 @@ int main() {
     };
     Body deimos = {
         .name = "Deimos",
-        .a = 2.3e8 * scale * 500, // not to scale; hand tuned because planetary radius was inflated
+        .a = 2.3e8 * scale * 50, // not to scale; hand tuned because planetary radius was inflated
         .e = 0,
         .radius = 6.2e3 * 10,
         .color = GRAY,
@@ -220,8 +230,13 @@ int main() {
                              &phobos, &deimos, &jupiter, &saturn, &pluto};
 
     for (int i = 0; i < BODYCNT; i++) {
-        // scale down Radii at runtime, calculate b to prevent error
         Planet *body = bodies[i];
+        // allocate memory for trail
+        body->trail.data = malloc(sizeof(Vector3) * TRAIL_LEN);
+        body->trail.len = TRAIL_LEN;
+        body->trail.start = 0;
+        body->trail.pos = 0;
+        // scale down Radii at runtime, calculate b to prevent error
         body->radius = body->radius * radScale;
         // e = sqrt(1-(b^2/a^2))
         // e^2*a^2 = a^2 - b^2
@@ -231,7 +246,7 @@ int main() {
         else
             body->b = sqrt(body->a * body->a * (1 - body->e * body->e));
     }
-    for (int currTime = 0; currTime < TIMELIM; currTime+=dt) {
+    for (float currTime = 0; currTime < TIMELIM; currTime+=dt) {
         BeginDrawing();
         ClearBackground(RAYWHITE);
         if (GetMouseWheelMove() != 0) {
@@ -300,6 +315,28 @@ int main() {
                                  remap),
                     offset3);
                 Vector2 flatPos = {mappedPos.x, mappedPos.y};
+                
+                // add to trail (should it be every frame or subiter?)
+                body->trail.data[body->trail.pos] = body->pos;
+                
+                // circular!
+                if (body->trail.pos >= body->trail.len - 1){
+                    body->trail.start++;
+                    body->trail.pos = 0;
+                }
+                else{
+                    body->trail.pos++;
+                }
+                if (body->trail.start!=0){
+                    // overwriting old trails
+                    body->trail.start++;
+                }
+                if (body->trail.start >= body->trail.len - 1){
+                    body->trail.start = 0;
+                }
+
+                
+                
                 if (subiter == 0) {
                     // only draw once per frame
                     if (labels) {
@@ -312,6 +349,18 @@ int main() {
                              10, 30, 20, BLACK);
                     // Draw DT in hours
                     DrawText(TextFormat("Hours per second: %.1f", dt / 3600. * 60.), 10, 50, 20, BLACK);
+                    // draw trail
+                    size_t start = body->trail.start;
+                    size_t end = body->trail.pos;
+                    size_t len = body->trail.len;
+                    for (size_t j = start; j != (end-1); j = (j+1 % len)) {
+                    Vector2 pos1 = {body->trail.data[j].x,body->trail.data[j].y};
+                    Vector2 pos2 = {body->trail.data[j+1].x,body->trail.data[j+1].y};
+                    pos1 = Vector2Add(Vector2Scale(pos1,remap),offset);
+                    pos2 = Vector2Add(Vector2Scale(pos2,remap),offset);
+                    DrawLineV(pos1,pos2, body->color);
+                    }
+
                 }
                 // t ^ 2 = k *a ^ 3
                 // k=t^2/a^3 = (365*3600*24)^2/(AU)^3 = 2.9704e-19
