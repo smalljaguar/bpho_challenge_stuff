@@ -105,9 +105,10 @@ int main() {
     static const float scale = 1e-3;
     static const float radScale = 1;
     static const float AU = 1.496e11 * scale; // delta of 1e4
-    static const float DT = 10000; // DT of 10000 = 3hrs per frame, ~week per second
+    float dt = 10000.;                        // DT of 10000 = 3hrs per frame, ~week per second
+    float currTime = 0;
     static const float TIMELIM = 3600. * 24. * 365.; // 1 year
-    static const size_t subLim = 10;                // steps per frame
+    static const size_t subLim = 10;                 // steps per frame
     float remap = 5e-6;
     float mult = 0;
     int labels = 1;
@@ -219,7 +220,7 @@ int main() {
                              &phobos, &deimos, &jupiter, &saturn, &pluto};
 
     for (int i = 0; i < BODYCNT; i++) {
-    // scale down Radii at runtime, calculate b to prevent error
+        // scale down Radii at runtime, calculate b to prevent error
         Planet *body = bodies[i];
         body->radius = body->radius * radScale;
         // e = sqrt(1-(b^2/a^2))
@@ -230,95 +231,104 @@ int main() {
         else
             body->b = sqrt(body->a * body->a * (1 - body->e * body->e));
     }
-        for (int iter = 0; (((float)iter) * DT) < TIMELIM; iter++) {
-            BeginDrawing();
-            ClearBackground(RAYWHITE);
-            if (GetMouseWheelMove() != 0) {
-                printf("mouse wheel move %f, remap was %f\n", GetMouseWheelMove(), remap);
-                if (GetMouseWheelMove() < 0.) {
-                    mult = max(.2, (1 / (-GetMouseWheelMove() + .5)));
-                } else {
-                    mult = min(5., GetMouseWheelMove() + .5);
-                }
-                remap *= mult;
-                printf("remap is now %f\n", remap);
+    for (int currTime = 0; currTime < TIMELIM; currTime+=dt) {
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        if (GetMouseWheelMove() != 0) {
+            printf("mouse wheel move %f, remap was %f\n", GetMouseWheelMove(), remap);
+            if (GetMouseWheelMove() < 0.) {
+                mult = max(.2, (1 / (-GetMouseWheelMove() + .5)));
+            } else {
+                mult = min(5., GetMouseWheelMove() + .5);
             }
-            if (IsKeyDown(KEY_LEFT)) {
-                offset.x += 10;
-            }
-            if (IsKeyDown(KEY_RIGHT)) {
-                offset.x -= 10;
-            }
-            if (IsKeyDown(KEY_UP)) {
-                offset.y += 10;
-            }
-            if (IsKeyDown(KEY_DOWN)) {
-                offset.y -= 10;
-            }
-            if (IsKeyPressed(KEY_R)) {
-                offset = (Vector2){(float)GetScreenWidth() / 2, (float)GetScreenHeight() / 2};
-                remap = 5e-6;
-            }
-            if (IsKeyPressed(KEY_SPACE)) {
-                paused = !paused;
-            }
-            if (IsKeyPressed(KEY_L)) {
-                labels = !labels;
-            }
-            if (IsKeyPressed(KEY_ESCAPE)) {
-                goto end;
-            }
-            for (size_t subiter = 0; subiter < subLim; subiter++) {
-                for (int i = 0; i < BODYCNT; i++) {
-                    Planet *body = bodies[i];
+            remap *= mult;
+            printf("remap is now %f\n", remap);
+        }
+        if (IsKeyDown(KEY_LEFT)) {
+            offset.x += 10;
+        }
+        if (IsKeyDown(KEY_RIGHT)) {
+            offset.x -= 10;
+        }
+        if (IsKeyDown(KEY_UP)) {
+            offset.y += 10;
+        }
+        if (IsKeyDown(KEY_DOWN)) {
+            offset.y -= 10;
+        }
+        if (IsKeyPressed(KEY_R)) {
+            offset = (Vector2){(float)GetScreenWidth() / 2, (float)GetScreenHeight() / 2};
+            remap = 5e-6;
+            dt = 10000.;
+        }
+        if (IsKeyPressed(KEY_SPACE)) {
+            paused = !paused;
+        }
+        if (IsKeyPressed(KEY_L)) {
+            labels = !labels;
+        }
+        if (IsKeyPressed(KEY_COMMA)) {
+            dt *= .9;
+        }
+        if (IsKeyPressed(KEY_PERIOD)) {
+            dt *= 1.1;
+        }
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            goto end;
+        }
+        for (size_t subiter = 0; subiter < subLim; subiter++) {
+            for (int i = 0; i < BODYCNT; i++) {
+                Planet *body = bodies[i];
 
-                    // Vector3 pos = {
-                    //     body.a * cos(body.theta) * cos(body.inclination),
-                    //     body.b * sin(body.theta),
-                    //     body.a * sin(body.theta) * cos(body.inclination),
-                    // };
-                    Vector3 pos = {
-                        body->a * cos(body->theta),
-                        body->b * sin(body->theta),
-                        0.,
-                    };
-                    if (body->parent != NULL) {
-                        pos = Vector3Add(pos, body->parent->pos);
+                // Vector3 pos = {
+                //     body.a * cos(body.theta) * cos(body.inclination),
+                //     body.b * sin(body.theta),
+                //     body.a * sin(body.theta) * cos(body.inclination),
+                // };
+                Vector3 pos = {
+                    body->a * cos(body->theta),
+                    body->b * sin(body->theta),
+                    0.,
+                };
+                if (body->parent != NULL) {
+                    pos = Vector3Add(pos, body->parent->pos);
+                }
+                body->pos = pos;
+                Vector3 offset3 = {offset.x, offset.y, 0};
+                Vector3 mappedPos = Vector3Add(
+                    Vector3Scale(body->pos,
+                                 remap),
+                    offset3);
+                Vector2 flatPos = {mappedPos.x, mappedPos.y};
+                if (subiter == 0) {
+                    // only draw once per frame
+                    if (labels) {
+                        DrawText(body->name, flatPos.x,
+                                 flatPos.y + body->radius * remap, 10, BLACK);
                     }
-                    body->pos = pos;
-                    Vector3 offset3 = {offset.x, offset.y, 0};
-                    Vector3 mappedPos = Vector3Add(
-                        Vector3Scale(body->pos,
-                                     remap),
-                        offset3);
-                    Vector2 flatPos = {mappedPos.x, mappedPos.y};
-                    if (subiter == 0) {
-                        // only draw once per frame
-                        if (labels) {
-                            DrawText(body->name, flatPos.x,
-                                     flatPos.y + body->radius * remap, 10, BLACK);
-                        }
-                        DrawCircleV(flatPos, body->radius * (remap), body->color);
-                        // draw iteration number in days (ITER*DT/3600/24)
-                        DrawText(TextFormat("Days: %.1f", ((float)iter) * DT / 3600. / 24.),
-                                 10, 30, 20, BLACK);
-                    }
-                    // t ^ 2 = k *a ^ 3
-                    // k=t^2/a^3 = (365*3600*24)^2/(AU)^3 = 2.9704e-19
-                    double k = 2.9704e-19 * 1 / (scale * scale * scale); // scale down AU
-                    double T = sqrt(k * body->a * body->a * body->a);
-                    if (T != 0 && !paused) { // don't divide by 0 (Sun)
-                        body->theta += DT / T / subLim * 2 * PI;
-                    }
+                    DrawCircleV(flatPos, body->radius * (remap), body->color);
+                    // draw iteration number in days (ITER*DT/3600/24)
+                    DrawText(TextFormat("Days: %.1f", currTime / 3600. / 24.),
+                             10, 30, 20, BLACK);
+                    // Draw DT in hours
+                    DrawText(TextFormat("Hours per second: %.1f", dt / 3600. * 60.), 10, 50, 20, BLACK);
+                }
+                // t ^ 2 = k *a ^ 3
+                // k=t^2/a^3 = (365*3600*24)^2/(AU)^3 = 2.9704e-19
+                double k = 2.9704e-19 * 1 / (scale * scale * scale); // scale down AU
+                double T = sqrt(k * body->a * body->a * body->a);
+                if (T != 0 && !paused) { // don't divide by 0 (Sun)
+                    body->theta += dt / T / subLim * 2 * PI;
                 }
             }
-            DrawFPS(10, 10);
-            EndDrawing();
+        }
+        DrawFPS(10, 10);
+        EndDrawing();
         if (WindowShouldClose())
             goto end; // this is done to exit current block scope and so avoid GLFW errors
-            // Don't need to free because basically everything is on the stack
-            // kinda jank but works
-        }
-            end:
-            CloseWindow();
+        // Don't need to free because basically everything is on the stack
+        // kinda jank but works
     }
+end:
+    CloseWindow();
+}
