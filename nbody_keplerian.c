@@ -7,7 +7,13 @@
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define clamp(a, b, c) (max(b, min(a, c)))
-#define TRAIL_LEN 1e8
+void UpdateDrawFrame(void);
+#if defined(PLATFORM_WEB)
+    #include <emscripten/emscripten.h>
+    #define TRAIL_LEN 1e5
+#else
+    #define TRAIL_LEN 1e7
+#endif
 // I build with cc nbody_chart.c -O3 -Wall -Wextra -pedantic -ffast-math -funsafe-math-optimizations -l:libraylib.a -lm -pthread -o nbody_chart
 
 // more "deterministic" than sim
@@ -24,10 +30,10 @@
 // https://exoplanetarchive.ipac.caltech.edu/ has some exoplanets
 // challenges:
 // challenge 1: Replicate kepler's 3rd law correlation
-// challenge 2: plot elliptical orbits of planets
+// challenge 2: plot elliptical orbits of planets (Done)
 // assume sun is stationary origin, orbits are ellipses in same plane
-// challenge 3: create a 2d animation of the planets orbiting the sun
-// plot inner 5 planets seperately from outer planets
+// challenge 3: create a 2d animation of the planets orbiting the sun (Done)
+// plot inner 5 planets seperately from outer planets 
 // inner planets have 1 earth orbit per s, outer planets have 1 jupiter orbit per s
 // challenge 4: create a 3d animation of the planets orbiting the sun
 // Pluto is basically the only one which will be noticeably inclined, but add data for all!
@@ -110,13 +116,14 @@ typedef struct Body {
 } Body;
 
 typedef Body Planet; // "OOP"
-
+typedef Body Moon;
+typedef Body Star;
 #define BODYCNT 11
-int main() {
     const float scale = 1e-3;
     const float radScale = 1;
     const float AU = 1.496e11 * scale;              // delta of 1e4
     float dt = 10000.;                              // DT of 10000 = 3hrs per frame, ~week per second
+    float currTime = 0;
     const float TIMELIM = 3600. * 24. * 365 * 100.; // 100 years
     const size_t subLim = 1;                        // steps per frame
     float remap = 5e-6;
@@ -124,8 +131,9 @@ int main() {
     int labels = 1;
     bool paused = false;
     bool trails = false;
+    Vector2 offset;
     // size_t iter = 0;
-    Body sun = {
+    Star sun = {
         .name = "Sun",
         .a = 0,
         .e = 0,
@@ -162,7 +170,7 @@ int main() {
         .color = BLUE,
         .parent = &sun,
     };
-    Body moon = {
+    Moon moon = {
         .name = "Moon",
         .a = 3.844e8 * scale * 50, // not to scale; hand tuned because earth radius was inflated
         .e = 0,
@@ -179,7 +187,7 @@ int main() {
         .color = RED,
         .parent = &sun,
     };
-    Body phobos = {
+    Moon phobos = {
         .name = "Phobos",
         .a = 9.378e7 * scale * 50, // not to scale; hand tuned because planetary radius was inflated
         .e = 0,
@@ -187,7 +195,7 @@ int main() {
         .color = GRAY,
         .parent = &mars,
     };
-    Body deimos = {
+    Moon deimos = {
         .name = "Deimos",
         .a = 2.3e8 * scale * 50, // not to scale; hand tuned because planetary radius was inflated
         .e = 0,
@@ -223,13 +231,14 @@ int main() {
         .color = DARKGRAY,
         .parent = &sun,
     };
-    InitWindow(800, 450, "raylib planets - basic demo?");
-    Vector2 offset = {(float)GetScreenWidth() / 2, (float)GetScreenHeight() / 2};
-    SetTargetFPS(60);
-
     Body *bodies[BODYCNT] = {&sun, &mercury, &venus, &earth, &moon, &mars,
                              &phobos, &deimos, &jupiter, &saturn, &pluto};
 
+
+int main(void) {
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
+    InitWindow(800, 450, "raylib planets - basic demo?");
+    offset = (Vector2){(float)GetScreenWidth() / 2, (float)GetScreenHeight() / 2};
     for (int i = 0; i < BODYCNT; i++) {
         Planet *body = bodies[i];
         // allocate memory for trail
@@ -247,149 +256,155 @@ int main() {
         else
             body->b = sqrt(body->a * body->a * (1 - body->e * body->e));
     }
-    for (float currTime = 0; currTime < TIMELIM; currTime += dt) {
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-        if (GetMouseWheelMove() != 0) {
-            printf("mouse wheel move %f, remap was %f\n", GetMouseWheelMove(), remap);
-            if (GetMouseWheelMove() < 0.) {
-                mult = max(.2, (1 / (-GetMouseWheelMove() + .5)));
-            } else {
-                mult = min(5., GetMouseWheelMove() + .5);
-            }
-            remap *= mult;
-            printf("remap is now %f\n", remap);
-        }
-        if (IsKeyDown(KEY_LEFT)) {
-            offset.x += 10;
-        }
-        if (IsKeyDown(KEY_RIGHT)) {
-            offset.x -= 10;
-        }
-        if (IsKeyDown(KEY_UP)) {
-            offset.y += 10;
-        }
-        if (IsKeyDown(KEY_DOWN)) {
-            offset.y -= 10;
-        }
-        if (IsKeyPressed(KEY_R)) {
-            offset = (Vector2){(float)GetScreenWidth() / 2, (float)GetScreenHeight() / 2};
-            remap = 5e-6;
-            dt = 10000.;
-        }
-        if (IsKeyPressed(KEY_SPACE)) {
-            paused = !paused;
-        }
-        if (IsKeyPressed(KEY_L)) {
-            labels = !labels;
-        }
-        if (IsKeyPressed(KEY_T)) {
-            trails = !trails;
-        }
-        if (IsKeyPressed(KEY_COMMA)) {
-            dt *= .9;
-        }
-        if (IsKeyPressed(KEY_PERIOD)) {
-            dt *= 1.1;
-        }
-        if (IsKeyPressed(KEY_ESCAPE)) {
-            goto end;
-        }
-        for (size_t subiter = 0; subiter < subLim * (size_t)(dt / 10000.); subiter++) {
-            for (int i = 0; i < BODYCNT; i++) {
-                Planet *body = bodies[i];
 
-                // Vector3 pos = {
-                //     body.a * cos(body.theta) * cos(body.inclination),
-                //     body.b * sin(body.theta),
-                //     body.a * sin(body.theta) * cos(body.inclination),
-                // };
-                Vector3 pos = {
-                    body->a * cos(body->theta),
-                    body->b * sin(body->theta),
-                    0.,
-                };
-                if (body->parent != NULL) {
-                    pos = Vector3Add(pos, body->parent->pos);
-                }
-                body->pos = pos;
-                Vector3 offset3 = {offset.x, offset.y, 0};
-                Vector3 mappedPos = Vector3Add(
-                    Vector3Scale(body->pos,
-                                 remap),
-                    offset3);
-                Vector2 flatPos = {mappedPos.x, mappedPos.y};
-
-                // add to trail (should it be every frame or subiter?)
-                if (!paused) {
-                    body->trail.data[body->trail.pos] = body->pos;
-
-                    // circular!
-                    if (body->trail.pos >= body->trail.len - 1) {
-                        body->trail.start++;
-                        body->trail.pos = 0;
-                    } else {
-                        body->trail.pos++;
-                    }
-                    if (body->trail.start != 0) {
-                        // overwriting old trails
-                        body->trail.start++;
-                    }
-                    if (body->trail.start >= body->trail.len - 1) {
-                        body->trail.start = 0;
-                    }
-                }
-                if (subiter == 0) {
-                    // only draw once per frame
-                    if (labels) {
-                        DrawText(body->name, flatPos.x,
-                                 flatPos.y + body->radius * remap, 10, BLACK);
-                    }
-                    DrawCircleV(flatPos, body->radius * (remap), body->color);
-                    // draw iteration number in days (ITER*DT/3600/24)
-                    DrawText(TextFormat("Days: %.1f", currTime / 3600. / 24.),
-                             10, 30, 20, BLACK);
-                    // Draw DT in hours
-                    DrawText(TextFormat("Hours per second: %.1f", dt / 3600. * 60.), 10, 50, 20, BLACK);
-                    // draw trail
-                    // TODO: fix drawing after circular overwrite 
-                    if (trails) {
-                        size_t start = body->trail.start;
-                        size_t end = body->trail.pos - 1; // to account for pos2 being j+1
-                        size_t len = body->trail.len;
-                        size_t usedLen = end - start;
-                        // probably festooned with off-by-one errors
-                        if (end > start) {
-                            usedLen = end - start;
-                        } else {
-                            usedLen = len - 1;
-                        }
-                        for (size_t j = 0; j < usedLen; j++) {
-                            j = (j + start) % len;
-                            Vector2 pos1 = {body->trail.data[j].x, body->trail.data[j].y};
-                            Vector2 pos2 = {body->trail.data[(j + 1) % len].x, body->trail.data[(j + 1) % len].y};
-                            pos1 = Vector2Add(Vector2Scale(pos1, remap), offset);
-                            pos2 = Vector2Add(Vector2Scale(pos2, remap), offset);
-                            DrawLineV(pos1, pos2, body->color);
-                        }
-                    }
-                }
-                // t ^ 2 = k *a ^ 3
-                // k=t^2/a^3 = (365*3600*24)^2/(AU)^3 = 2.9704e-19
-                double k = 2.9704e-19 * 1 / (scale * scale * scale); // scale down AU
-                double T = sqrt(k * body->a * body->a * body->a);
-                if (T != 0 && !paused) { // don't divide by 0 (Sun)
-                    body->theta += dt / T / (subLim * (size_t)(dt / 10000.)) * 2 * PI;
-                }
-            }
-        }
-        DrawFPS(10, 10);
-        EndDrawing();
-        if (WindowShouldClose())
-            goto end; // this is done to exit current block scope and so avoid GLFW errors
-        // Don't need to free because basically everything is on the stack
-        // kinda jank but works
+#if defined(PLATFORM_WEB)
+    emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
+#else
+    SetTargetFPS(60);
+    while (!WindowShouldClose())    // Detect window close button or ESC key
+    {
+        UpdateDrawFrame();
     }
-end:
-    CloseWindow();
+#endif
 }
+
+void UpdateDrawFrame(void){
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+    
+    if (GetMouseWheelMove() != 0) {
+        if (GetMouseWheelMove() < 0.) {
+            mult = max(.2, (1 / (-GetMouseWheelMove() + .5)));
+        } else {
+            mult = min(5., GetMouseWheelMove() + .5);
+        }
+        remap *= mult;
+    }
+    if (IsKeyDown(KEY_LEFT)) {
+        offset.x += 10;
+    }
+    if (IsKeyDown(KEY_RIGHT)) {
+        offset.x -= 10;
+    }
+    if (IsKeyDown(KEY_UP)) {
+        offset.y += 10;
+    }
+    if (IsKeyDown(KEY_DOWN)) {
+        offset.y -= 10;
+    }
+    if (IsKeyPressed(KEY_R)) {
+        offset = (Vector2){(float)GetScreenWidth() / 2, (float)GetScreenHeight() / 2};
+        remap = 5e-6;
+        dt = 10000.;
+    }
+    if (IsKeyPressed(KEY_SPACE)) {
+        paused = !paused;
+    }
+    if (IsKeyPressed(KEY_L)) {
+        labels = !labels;
+    }
+    if (IsKeyPressed(KEY_T)) {
+        trails = !trails;
+    }
+    if (IsKeyPressed(KEY_COMMA)) {
+        dt *= (1.0/1.1);
+    }
+    if (IsKeyPressed(KEY_PERIOD)) {
+        dt *= 1.1;
+    }
+    for (size_t subiter = 0; subiter < subLim * (size_t)(dt / 10000.); subiter++) {
+        if (subiter == 0){ // prevent drawing once per Body by drawing outside of body loop
+            // draw iteration number in days (ITER*DT/3600/24)
+            DrawText(TextFormat("Days: %.1f", currTime / 3600. / 24.),
+                    10, 30, 20, BLACK);
+            // Draw DT in hours
+            DrawText(TextFormat("Hours per second: %.1f", dt / 3600. * 60.), 10, 50, 20, BLACK);
+        }
+        for (int i = 0; i < BODYCNT; i++) {
+            Planet *body = bodies[i];
+
+            // Vector3 pos = {
+            //     body.a * cos(body.theta) * cos(body.inclination),
+            //     body.b * sin(body.theta),
+            //     body.a * sin(body.theta) * cos(body.inclination),
+            // };
+            Vector3 pos = {
+                body->a * cos(body->theta),
+                body->b * sin(body->theta),
+                0.,
+            };
+            if (body->parent != NULL) {
+                pos = Vector3Add(pos, body->parent->pos);
+            }
+            body->pos = pos;
+            Vector3 offset3 = {offset.x, offset.y, 0};
+            Vector3 mappedPos = Vector3Add(
+                Vector3Scale(body->pos,
+                                remap),
+                offset3);
+            Vector2 flatPos = {mappedPos.x, mappedPos.y};
+
+            // add to trail (should it be every frame or subiter?)
+            if (!paused) {
+                currTime += dt;
+                
+                body->trail.data[body->trail.pos] = body->pos;
+
+                // circular!
+                if (body->trail.pos >= body->trail.len - 1) {
+                    body->trail.start++;
+                    body->trail.pos = 0;
+                } else {
+                    body->trail.pos++;
+                }
+                if (body->trail.start != 0) {
+                    // overwriting old trails
+                    body->trail.start++;
+                }
+                if (body->trail.start >= body->trail.len - 1) {
+                    body->trail.start = 0;
+                }
+            }
+            if (subiter == 0) {
+                // only draw once per frame
+                if (labels) {
+                    DrawText(body->name, flatPos.x,
+                                flatPos.y + body->radius * remap, 10, BLACK);
+                }
+                DrawCircleV(flatPos, body->radius * (remap), body->color);
+                
+                // draw trail
+                // TODO: fix drawing after circular overwrite 
+                if (trails) {
+                    size_t start = body->trail.start;
+                    size_t end = body->trail.pos - 1; // to account for pos2 being j+1
+                    size_t len = body->trail.len;
+                    size_t usedLen = end - start;
+                    // probably festooned with off-by-one errors
+                    if (end > start) {
+                        usedLen = end - start;
+                    } else {
+                        usedLen = len - 1;
+                    }
+                    for (size_t j = 0; j < usedLen; j++) {
+                        j = (j + start) % len;
+                        Vector2 pos1 = {body->trail.data[j].x, body->trail.data[j].y};
+                        Vector2 pos2 = {body->trail.data[(j + 1) % len].x, body->trail.data[(j + 1) % len].y};
+                        pos1 = Vector2Add(Vector2Scale(pos1, remap), offset);
+                        pos2 = Vector2Add(Vector2Scale(pos2, remap), offset);
+                        DrawLineV(pos1, pos2, body->color);
+                    }
+                }
+            }
+            // t ^ 2 = k *a ^ 3
+            // k=t^2/a^3 = (365*3600*24)^2/(AU)^3 = 2.9704e-19
+            double k = 2.9704e-19 * 1 / (scale * scale * scale); // scale down AU
+            double T = sqrt(k * body->a * body->a * body->a);
+            if (T != 0 && !paused) { // don't divide by 0 (Sun)
+                body->theta += dt / T / (subLim * (size_t)(dt / 10000.)) * 2 * PI;
+            }
+        }
+    }
+    DrawFPS(10, 10);
+    EndDrawing();
+ }
