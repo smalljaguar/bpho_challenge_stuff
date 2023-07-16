@@ -1,5 +1,6 @@
 #include "raylib.h"
 #include "raymath.h"
+#include "rlgl.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -33,7 +34,7 @@ void UpdateDrawFrame(void);
 // challenge 2: plot elliptical orbits of planets (Done)
 // assume sun is stationary origin, orbits are ellipses in same plane
 // challenge 3: create a 2d animation of the planets orbiting the sun (Done)
-// plot inner 5 planets seperately from outer planets
+// plot inner 5 planets seperately from outer planets 
 // inner planets have 1 earth orbit per s, outer planets have 1 jupiter orbit per s
 // challenge 4: create a 3d animation of the planets orbiting the sun
 // Pluto is basically the only one which will be noticeably inclined, but add data for all!
@@ -92,6 +93,7 @@ void UpdateDrawFrame(void);
 
 // semi major axis can be found by max dist from barycentre
 // period can be found by time to start pos within epsilon e.g. (in AU) 1e-6
+// for data:https://nssdc.gsfc.nasa.gov/planetary/factsheet/
 
 typedef struct CircularArray {
     size_t len;
@@ -118,20 +120,23 @@ typedef struct Body {
 typedef Body Planet; // "OOP"
 typedef Body Moon;
 typedef Body Star;
-#define BODYCNT 11
+#define BODYCNT 13
 const float scale = 1e-3;
 const float radScale = 1;
-const float AU = 1.496e11 * scale; // delta of 1e4
-float dt = 10000.;                 // DT of 10000 = 3hrs per frame, ~week per second
+const float AU = 1.496e11 * scale;              // delta of 1e4
+float dt = 10000.;                              // DT of 10000 = 3hrs per frame, ~week per second
 float currTime = 0;
 const float TIMELIM = 3600. * 24. * 365 * 100.; // 100 years
 const size_t subLim = 1;                        // steps per frame
-float remap = 5e-6;
-float mult = 0;
+float remap = 1e-8;
+
+Camera3D camera;
+int camera_mode = CAMERA_ORBITAL;
+
 int labels = 1;
 bool paused = false;
 bool trails = false;
-Vector2 offset;
+
 // size_t iter = 0;
 Star sun = {
     .name = "Sun",
@@ -145,8 +150,8 @@ Star sun = {
 Planet mercury = {
     .name = "Mercury",
     .a = 0.38709893 * AU,
-    .e = 0,
-    .inclination = 0,
+    .e = 0.20563069,
+    .inclination = 7. * PI / 180., 
     .radius = 6.371e6,
     .color = LIGHTGRAY,
     .parent = &sun,
@@ -155,7 +160,7 @@ Planet venus = {
     .name = "Venus",
     .a = 0.72333199 * AU,
     .e = 0,
-    .inclination = 0,
+    .inclination = 3.4 * PI / 180.,
     .radius = 6.051e6,
     .color = YELLOW,
     .parent = &sun,
@@ -174,6 +179,7 @@ Moon moon = {
     .name = "Moon",
     .a = 3.844e8 * scale * 50, // not to scale; hand tuned because earth radius was inflated
     .e = 0,
+    .inclination = 5.1 * PI / 180.,
     .radius = 1.7374e6,
     .color = GRAY,
     .parent = &earth,
@@ -182,7 +188,7 @@ Planet mars = {
     .name = "Mars",
     .a = 1.52366231 * AU,
     .e = 0,
-    .inclination = 0,
+    .inclination = 1.85 * PI / 180.,
     .radius = 3.3895e6,
     .color = RED,
     .parent = &sun,
@@ -191,6 +197,7 @@ Moon phobos = {
     .name = "Phobos",
     .a = 9.378e7 * scale * 50, // not to scale; hand tuned because planetary radius was inflated
     .e = 0,
+    .inclination = 0,
     .radius = 1.1267e4 * 10,
     .color = GRAY,
     .parent = &mars,
@@ -199,6 +206,7 @@ Moon deimos = {
     .name = "Deimos",
     .a = 2.3e8 * scale * 50, // not to scale; hand tuned because planetary radius was inflated
     .e = 0,
+    .inclination = 0,
     .radius = 6.2e3 * 10,
     .color = GRAY,
     .parent = &mars,
@@ -207,7 +215,7 @@ Planet jupiter = {
     .name = "Jupiter",
     .a = 5.204267 * AU,
     .e = 0,
-    .inclination = 0,
+    .inclination = 1.3 * PI / 180.,
     .radius = 6.9911e7,
     .color = ORANGE,
     .parent = &sun,
@@ -216,28 +224,64 @@ Planet saturn = {
     .name = "Saturn",
     .a = 9.582017 * AU,
     .e = 0,
-    .inclination = 0,
+    .inclination = 2.5 * PI / 180.,
     .radius = 5.8232e7,
     .color = BROWN,
     .parent = &sun,
 
 };
+Planet uranus = {
+    .name = "Uranus",
+    .a = 19.22941195 * AU,
+    .e = 0,
+    .inclination = 0.8 * PI / 180.,
+    .radius = 2.5362e7,
+    .color = SKYBLUE,
+    .parent = &sun,
+};
+Planet neptune = {
+    .name = "Neptune",
+    .a = 30.10366151 * AU,
+    .e = 0,
+    .inclination = 1.8 * PI / 180.,
+    .radius = 2.4622e7,
+    .color = DARKBLUE,
+    .parent = &sun,
+};
 Planet pluto = {
     .name = "Pluto",
     .a = 39.48211675 * AU,
-    .e = 0,
-    .inclination = 0,
+    .e = .244,
+    .inclination = 17*PI/180.,
     .radius = 1.188e6,
     .color = DARKGRAY,
     .parent = &sun,
 };
 Body *bodies[BODYCNT] = {&sun, &mercury, &venus, &earth, &moon, &mars,
-                         &phobos, &deimos, &jupiter, &saturn, &pluto};
+                            &phobos, &deimos, &jupiter, &saturn,&uranus,&neptune, &pluto};
+
 
 int main(void) {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(800, 450, "raylib planets - basic demo?");
-    offset = (Vector2){(float)GetScreenWidth() / 2, (float)GetScreenHeight() / 2};
+    // skybox
+    // https://github.com/petrocket/spacescape
+    // Mesh cube = GenMeshCube(1.0f, 1.0f, 1.0f);
+    // Model skybox = LoadModelFromMesh(cube);
+    // Shader sky_shader = LoadShader(0, "skybox_shader.glsl");
+    // skybox.materials[0].shader = sky_shader;
+
+    // SetShaderValue(skybox.materials[0].shader, GetShaderLocation(skybox.materials[0].shader, "environmentMap"), (int[1]){ MATERIAL_MAP_CUBEMAP }, SHADER_UNIFORM_INT);
+    // SetShaderValue(skybox.materials[0].shader, GetShaderLocation(skybox.materials[0].shader, "doGamma"), (int[1]) { useHDR ? 1 : 0 }, SHADER_UNIFORM_INT);
+    // SetShaderValue(skybox.materials[0].shader, GetShaderLocation(skybox.materials[0].shader, "vflipped"), (int[1]){ useHDR ? 1 : 0 }, SHADER_UNIFORM_INT);
+
+    DisableCursor();
+
+    camera.position = (Vector3){ 16.0f, 16.0f, 16.0f }; // Camera position
+    camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };      // Camera looking at point
+    camera.up = (Vector3){ 0.0f, 0.0f, 1.0f };          // Camera up vector (rotation towards target)
+    camera.fovy = 45.0f;                                // Camera field-of-view Y
+    camera.projection = CAMERA_ORTHOGRAPHIC;             // Camera projection type
     for (int i = 0; i < BODYCNT; i++) {
         Planet *body = bodies[i];
         // allocate memory for trail
@@ -260,40 +304,30 @@ int main(void) {
     emscripten_set_main_loop(UpdateDrawFrame, 0, 1);
 #else
     SetTargetFPS(60);
-    while (!WindowShouldClose()) // Detect window close button or ESC key
+    while (!WindowShouldClose())    // Detect window close button or ESC key
     {
         UpdateDrawFrame();
     }
 #endif
 }
 
-void UpdateDrawFrame(void) {
+void UpdateDrawFrame(void){
     BeginDrawing();
-    ClearBackground(RAYWHITE);
 
-    if (GetMouseWheelMove() != 0) {
-        if (GetMouseWheelMove() < 0.) {
-            mult = max(.2, (1 / (-GetMouseWheelMove() + .5)));
-        } else {
-            mult = min(5., GetMouseWheelMove() + .5);
-        }
-        remap *= mult;
-    }
-    if (IsKeyDown(KEY_LEFT)) {
-        offset.x += 10;
-    }
-    if (IsKeyDown(KEY_RIGHT)) {
-        offset.x -= 10;
-    }
-    if (IsKeyDown(KEY_UP)) {
-        offset.y += 10;
-    }
-    if (IsKeyDown(KEY_DOWN)) {
-        offset.y -= 10;
+    // add starfield option
+    // https://www.shadertoy.com/view/Md2SR3
+    // https://github.com/raysan5/raylib/blob/bc9c06325481c0b4b5a2db3b2a8281465569ba3e/examples/models/models_skybox.c
+    
+    ClearBackground(BLACK);
+    
+    UpdateCamera(&camera,camera_mode);
+    if (GetMouseWheelMove() != 0){
+        camera.fovy += GetMouseWheelMove();
     }
     if (IsKeyPressed(KEY_R)) {
-        offset = (Vector2){(float)GetScreenWidth() / 2, (float)GetScreenHeight() / 2};
-        remap = 5e-6;
+        camera.position = (Vector3){ 16.0f, 16.0f, 16.0f }; 
+        camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };      
+        camera.fovy = 45.0f;
         dt = 10000.;
     }
     if (IsKeyPressed(KEY_SPACE)) {
@@ -306,48 +340,39 @@ void UpdateDrawFrame(void) {
         trails = !trails;
     }
     if (IsKeyPressed(KEY_COMMA)) {
-        dt *= (1.0 / 1.1);
+        dt *= (1.0/1.1);
     }
     if (IsKeyPressed(KEY_PERIOD)) {
         dt *= 1.1;
     }
     for (size_t subiter = 0; subiter < subLim * (size_t)(dt / 10000.); subiter++) {
-        if (subiter == 0) { // prevent drawing once per Body by drawing outside of body loop
+        if (subiter == 0){ // prevent drawing once per Body by drawing outside of body loop
             // draw iteration number in days (ITER*DT/3600/24)
             DrawText(TextFormat("Days: %.1f", currTime / 3600. / 24.),
-                     10, 30, 20, BLACK);
+                    10, 30, 20, BLACK);
             // Draw DT in hours
             DrawText(TextFormat("Hours per second: %.1f", dt / 3600. * 60.), 10, 50, 20, BLACK);
         }
         for (int i = 0; i < BODYCNT; i++) {
             Planet *body = bodies[i];
 
-            // Vector3 pos = {
-            //     body.a * cos(body.theta) * cos(body.inclination),
-            //     body.b * sin(body.theta),
-            //     body.a * sin(body.theta) * cos(body.inclination),
-            // };
             Vector3 pos = {
-                body->a * cos(body->theta),
+                body->a * cos(body->theta) * cos(body->inclination),
                 body->b * sin(body->theta),
-                0.,
+                body->a * sin(body->theta) * sin(body->inclination),
             };
+
             if (body->parent != NULL) {
                 pos = Vector3Add(pos, body->parent->pos);
             }
             body->pos = pos;
-            Vector3 offset3 = {offset.x, offset.y, 0};
-            Vector3 mappedPos = Vector3Add(
-                Vector3Scale(body->pos,
-                             remap),
-                offset3);
-            Vector2 flatPos = {mappedPos.x, mappedPos.y};
+            Vector3 mappedPos = Vector3Scale(body->pos,remap);
 
             // add to trail (should it be every frame or subiter?)
             if (!paused) {
                 currTime += dt;
-
-                body->trail.data[body->trail.pos] = body->pos;
+                
+                body->trail.data[body->trail.pos] = Vector3Scale(body->pos,remap);
 
                 // circular!
                 if (body->trail.pos >= body->trail.len - 1) {
@@ -365,15 +390,22 @@ void UpdateDrawFrame(void) {
                 }
             }
             if (subiter == 0) {
+                BeginMode3D(camera);
+                // rotate to match orbital plane
+                rlPushMatrix();
+                rlRotatef(90,1,0,0);
+                if (i==0) DrawGrid(10, 1.0f);
+                rlPopMatrix();
                 // only draw once per frame
                 if (labels) {
-                    DrawText(body->name, flatPos.x,
-                             flatPos.y + body->radius * remap, 10, BLACK);
+                    // write to a render texture?
+                    // DrawText(body->name, pos.x,
+                    //             pos.y + body->radius * remap, 10, BLACK);
                 }
-                DrawCircleV(flatPos, body->radius * (remap), body->color);
-
+                DrawSphere(mappedPos, body->radius*remap, body->color);
+                // printf("mapped pos: %f %f %f, radius: %f \n", mappedPos.x, mappedPos.y, mappedPos.z,remap*body->radius);
                 // draw trail
-                // TODO: fix drawing after circular overwrite
+                // TODO: fix drawing after circular overwrite 
                 if (trails) {
                     size_t start = body->trail.start;
                     size_t end = body->trail.pos - 1; // to account for pos2 being j+1
@@ -387,13 +419,12 @@ void UpdateDrawFrame(void) {
                     }
                     for (size_t j = 0; j < usedLen; j++) {
                         j = (j + start) % len;
-                        Vector2 pos1 = {body->trail.data[j].x, body->trail.data[j].y};
-                        Vector2 pos2 = {body->trail.data[(j + 1) % len].x, body->trail.data[(j + 1) % len].y};
-                        pos1 = Vector2Add(Vector2Scale(pos1, remap), offset);
-                        pos2 = Vector2Add(Vector2Scale(pos2, remap), offset);
-                        DrawLineV(pos1, pos2, body->color);
+                        Vector3 pos1 = body->trail.data[j];
+                        Vector3 pos2 = body->trail.data[(j + 1) % len];
+                        DrawLine3D(pos1, pos2, body->color);
                     }
                 }
+            EndMode3D();
             }
             // t ^ 2 = k *a ^ 3
             // k=t^2/a^3 = (365*3600*24)^2/(AU)^3 = 2.9704e-19
@@ -406,4 +437,4 @@ void UpdateDrawFrame(void) {
     }
     DrawFPS(10, 10);
     EndDrawing();
-}
+ }
