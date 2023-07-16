@@ -1,0 +1,13 @@
+reference URLs:
+projecting 3d to 2d: https://bedroomcoders.co.uk/posts/173
+cheatsheet: https://www.raylib.com/cheatsheet/cheatsheet.html
+styleguide: https://www.kernel.org/doc/html/v4.10/process/coding-style.html
+other competitors:
+https://github.com/carlos-lorenzo/solarkit
+https://github.com/ostephagus/SolarSystemOrbits
+https://github.com/SritejT/BPhO_2023_Comp_Physics_Challenge
+https://github.com/mgvez/jsorrery
+
+data:
+https://ssd.jpl.nasa.gov/
+https://exoplanetarchive.ipac.caltech.edu/
