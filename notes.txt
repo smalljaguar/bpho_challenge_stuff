@@ -7,7 +7,13 @@ https://github.com/carlos-lorenzo/solarkit
 https://github.com/ostephagus/SolarSystemOrbits
 https://github.com/SritejT/BPhO_2023_Comp_Physics_Challenge
 https://github.com/mgvez/jsorrery
-
+https://github.com/alex-kennedy/solar-system
+https://github.com/LordIdra/OSTRICH
+https://github.com/sefffal/PlanetOrbits.jl
+https://github.com/eleanorlutz/asteroids_atlas_of_space
+https://github.com/maxmahlke/SolarSystemOrbiter
+https://github.com/jshor/tycho
 data:
 https://ssd.jpl.nasa.gov/
 https://exoplanetarchive.ipac.caltech.edu/
+https://nssdc.gsfc.nasa.gov/planetary/factsheet/
