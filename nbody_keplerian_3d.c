@@ -93,7 +93,7 @@ void UpdateDrawFrame(void);
 
 // semi major axis can be found by max dist from barycentre
 // period can be found by time to start pos within epsilon e.g. (in AU) 1e-6
-// for data:https://nssdc.gsfc.nasa.gov/planetary/factsheet/
+// for data:
 
 typedef struct CircularArray {
     size_t len;
