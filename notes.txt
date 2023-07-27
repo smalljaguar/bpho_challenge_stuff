@@ -18,3 +18,4 @@ data:
 https://ssd.jpl.nasa.gov/
 https://exoplanetarchive.ipac.caltech.edu/
 https://nssdc.gsfc.nasa.gov/planetary/factsheet/
+http://exoplanet.eu/catalog/gliese_49_b/
