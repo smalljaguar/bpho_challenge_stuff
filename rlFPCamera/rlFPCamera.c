@@ -79,11 +79,11 @@ void rlFPCameraInit(rlFPCamera* camera, float fovY, Vector3 position)
     camera->ViewCamera.position = position;
     camera->ViewCamera.position.y += camera->PlayerEyesPosition;
     camera->ViewCamera.target = Vector3Add(camera->ViewCamera.position, (Vector3) { 0, 0, camera->TargetDistance });
-    camera->ViewCamera.up = (Vector3){ 0.0f, 0.0f, 1.0f };
+    camera->ViewCamera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
     camera->ViewCamera.fovy = fovY;
     camera->ViewCamera.projection = CAMERA_PERSPECTIVE;
 
-    camera->AllowFlight = true; //edited from default
+    camera->AllowFlight = false; 
 
     camera->NearPlane = 0.01; // if made too large may cause z-fighting
     camera->FarPlane = 1000.0;

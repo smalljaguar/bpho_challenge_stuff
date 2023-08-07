@@ -43,16 +43,20 @@ void UpdateDrawFrame(void);
 // challenge 3: create a 2d animation of the planets orbiting the sun (Done)
 // plot inner 5 planets seperately from outer planets
 // inner planets have 1 earth orbit per s, outer planets have 1 jupiter orbit
-// per s challenge 4: create a 3d animation of the planets orbiting the sun
+// per s 
+// challenge 4: create a 3d animation of the planets orbiting the sun
 // Pluto is basically the only one which will be noticeably inclined, but add
-// data for all! challenge 5: calculate orbit angle vs time for an eccentric
-// orbit e.g. Pluto and compare to a circular one with same period will have to
-// do numerical integration with cumsum, simpson's rule challenge 6: solar
-// system spirograph Choose a pair of planets and determine their orbits vs
-// time. At time intervals of Dt, draw a line between the planets and plot this
-// line. Keep going for N orbits of the outermost planet. challenge 7: like
-// Ptolemy, use orbital models to plot the orbits of bodies relative to another
-// orbiting body, e.g. earth extensions! make n body sims of binary stars! do
+// data for all! (done)
+// challenge 5: calculate orbit angle vs time for an eccentric orbit 
+// e.g. Pluto and compare to a circular one with same period will have to
+// do numerical integration with cumsum, simpson's rule 
+// challenge 6: solar system spirograph
+// Choose a pair of planets and determine their orbits vs time.
+// At time intervals of Dt, draw a line between the planets and plot this
+// line. Keep going for N orbits of the outermost planet. 
+// challenge 7: like Ptolemy, use orbital models to plot the orbits of bodies relative to another
+// orbiting body, e.g. earth 
+// extensions! make n body sims of binary stars! do
 // more funky exoplanet stuff data can be found at visualise lagrange points
 // relativistic corrections
 // {\displaystyle \sigma ={\frac {24\pi
@@ -90,7 +94,8 @@ void UpdateDrawFrame(void);
 // graphed for both our solar system and exoplanet.eu data) line of best fit can
 // be found and grad diff from linear should be v small (remember, best fit
 // should go through 0,0)
-
+// https://en.wikipedia.org/wiki/List_of_multiplanetary_systems
+ 
 // there are various ways to detect exoplanets (see here:
 // https://en.wikipedia.org/wiki/Methods_of_detecting_exoplanets)
 
@@ -135,15 +140,16 @@ const size_t subLim = 1;                        // steps per frame
 float remap = 1e-8;
 RenderTexture2D target;
 Model plane;
-bool XorY = false;
+bool XorZ = false;
 bool help = true;
-int labels = 1;
+bool labels = true;
 bool paused = false;
 bool trails = false;
 
-Camera3D camera;
-int camera_mode = CAMERA_FIRST_PERSON;
-
+Vector3 StartPosition;
+float fovy;
+rlFPCamera camera;
+Camera3D *ViewCamera;
 // size_t iter = 0;
 Star sun = {
     .name = "Sun",
@@ -267,9 +273,10 @@ Planet pluto = {
 Body *bodies[] = {&sun,    &mercury, &venus,  &earth,  &moon,    &mars, &phobos,
                   &deimos, &jupiter, &saturn, &uranus, &neptune, &pluto};
 size_t bodycnt = sizeof(bodies) / sizeof(bodies[0]);
+Planet *CentrePlanet = &sun;
 int main(void) {
   SetConfigFlags(FLAG_MSAA_4X_HINT);
-  InitWindow(800, 450, "raylib planets - basic demo?");
+  InitWindow(1900, 900, "raylib planets - basic demo");
   // skybox
   // https://github.com/petrocket/spacescape
   // Mesh cube = GenMeshCube(1.0f, 1.0f, 1.0f);
@@ -286,20 +293,24 @@ int main(void) {
   // GetShaderLocation(skybox.materials[0].shader, "vflipped"), (int[1]){ useHDR
   // ? 1 : 0 }, SHADER_UNIFORM_INT);
 
-  DisableCursor();
   plane = LoadModelFromMesh(GenMeshPlane(LABELSIZE * 10.0f, LABELSIZE * 10.0f, 1, 1));
-  camera.position = (Vector3){1.0f, 1.0f, 0.0f}; // Camera position
-  camera.target = (Vector3){0.0f, 0.0f, 0.0f};   // Camera looking at point
-  camera.up = (Vector3){0.0f, 0.0f, 1.0f};       // Camera up vector (rotation towards target)
-  camera.fovy = 45.0f;                           // Camera field-of-view Y
-  camera.projection = CAMERA_ORTHOGRAPHIC;       // Camera projection type
+  Vector3 StartPosition = (Vector3){1.0f, 0.0f, 0.0f}; // Camera position
+  float fovy = 45.0f;                           // Camera field-of-view Y
+  rlFPCameraInit(&camera,fovy,StartPosition);
+  ViewCamera = &(camera.ViewCamera);
+  ViewCamera->up = (Vector3){0.0f,1.0f,0.0f};
+  ViewCamera->target = Vector3Zero();
+  camera.MoveSpeed.z = 10;
+  camera.MoveSpeed.x = 5;
+  camera.FarPlane = 5000;
+  camera.AllowFlight = true;
   for (size_t i = 0; i < bodycnt; i++) {
     Planet *body = bodies[i];
     // allocate memory for trail
     body->trail.data = malloc(sizeof(Vector3) * TRAIL_LEN);
     if (body->trail.data == NULL) {
       fputs("Out of Memory!\n", stderr);
-      return 0; // OOM, OS can do cleanup i guess
+      return 1; // OOM, OS can do cleanup i guess
     }
     body->trail.len = TRAIL_LEN;
     body->trail.start = 0;
@@ -336,7 +347,6 @@ int main(void) {
     UnloadRenderTexture(body->label);
   }
 }
-void updateCam(void);
 void UpdateDrawFrame(void) {
   BeginDrawing();
 
@@ -346,18 +356,17 @@ void UpdateDrawFrame(void) {
 
   ClearBackground(RAYWHITE);
   // If you change ClearBackground col, make sure to change the text color
-  if (!paused) {
-    UpdateCamera(&camera, camera_mode);
-  }
+  rlFPCameraUpdate(&camera);
   if (GetMouseWheelMove() != 0) {
-    camera.fovy += GetMouseWheelMove();
-    camera.fovy = clamp(355, 1, camera.fovy);
+    ViewCamera->fovy += GetMouseWheelMove();
+    ViewCamera->fovy = clamp(355, 1, ViewCamera->fovy);
   }
   if (IsKeyPressed(KEY_R)) {
-    camera.position = (Vector3){1.0f, 1.0f, 0.0f};
-    camera.target = (Vector3){0.0f, 0.0f, 0.0f};
-    camera.fovy = 45.0f;
+    camera.CameraPosition = StartPosition;
+    ViewCamera->target = Vector3Zero();
+    ViewCamera->fovy = fovy;
     dt = 10000.;
+    CentrePlanet = &sun;
   }
   if (IsKeyPressed(KEY_SPACE)) {
     paused = !paused;
@@ -378,7 +387,10 @@ void UpdateDrawFrame(void) {
     help = !help;
   }
   if (IsKeyPressed(KEY_X)) {
-    XorY = !XorY;
+    XorZ = !XorZ;
+  }
+  if (IsKeyPressed(KEY_P)){
+    CentrePlanet = &earth;
   }
 
   for (size_t subiter = 0; subiter < subLim * (size_t)(dt / 10000.); subiter++) {
@@ -388,34 +400,41 @@ void UpdateDrawFrame(void) {
       DrawText(TextFormat("Days: %.1f", currTime / 3600. / 24.), 10, 30, 20, BLACK);
       // Draw DT in hours
       DrawText(TextFormat("Hours per second: %.1f", dt / 3600. * 60.), 10, 50, 20, BLACK);
-      DrawText(TextFormat("FOV: %f", camera.fovy), 10, 70, 20, BLACK);
+      DrawText(TextFormat("FOV: %.1f", ViewCamera->fovy), 10, 70, 20, BLACK);
+
+      Vector3 pos = ViewCamera->position;
+      Vector3 target = ViewCamera->target;
+      DrawText(TextFormat("pos: x:%.1f y:%.1f z:5.1f",pos.x,pos.y,pos.z),10,90,20,BLACK);
+      // DrawText(TextFormat("target: x:%.1f y:%.1f z:5.1f",target.x,target.y,target.z),10,110,20,BLACK);
       if (help) {
         DrawText(
             "Help info: press L to toggle labels, H to toggle help, \n[Space] to toggle pause, T "
             "to toggle trails\n[comma] and [period] to slow down and speed up the sim respectively",
-            10, 90, 20, BLACK);
+            10, 110, 20, BLACK);
       }
+      
     }
     for (size_t i = 0; i < bodycnt; i++) {
       Planet *body = bodies[i];
 
       Vector3 pos = {
           body->a * cos(body->theta) * cos(body->inclination),
-          body->b * sin(body->theta),
           body->a * sin(body->theta) * sin(body->inclination),
+          body->b * sin(body->theta),
       };
 
       if (body->parent != NULL) {
         pos = Vector3Add(pos, body->parent->pos);
       }
       body->pos = pos;
-      Vector3 mappedPos = Vector3Scale(body->pos, remap);
+      Vector3 OffsetPos = Vector3Subtract(pos,CentrePlanet->pos);
+      Vector3 mappedPos = Vector3Scale(OffsetPos, remap);
 
       // add to trail (should it be every frame or subiter?)
       if (!paused) {
         currTime += dt;
 
-        body->trail.data[body->trail.pos] = Vector3Scale(body->pos, remap);
+        body->trail.data[body->trail.pos] = body->pos;
 
         // circular!
         if (body->trail.pos >= body->trail.len - 1) {
@@ -433,37 +452,39 @@ void UpdateDrawFrame(void) {
         }
       }
       if (subiter == 0) {
-        BeginMode3D(camera);
+        rlFPCameraBeginMode3D(&camera);
         // rotate to match orbital plane
-        rlPushMatrix();
-        rlRotatef(90, 1, 0, 0);
-        if (i == 0)
+        if (i == 0){
           DrawGrid(10, 1.0f);
-        DrawSphere(camera.position, body->radius * remap, BLUE);
-        rlPopMatrix();
+        }
         // only draw once per frame
         if (labels) {
           // write to a render texture
           // TODO: cleanup, don't generate label every frame
           plane.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = body->label.texture;
+          DrawLine3D(ViewCamera->target, mappedPos, BLUE);
+          DrawLine3D(Vector3Zero(), (Vector3){0.f,0.f,100.f}, BLUE);
+          DrawLine3D(Vector3Zero(), (Vector3){0.f,100.f,0.f}, BLUE);
+          DrawLine3D(Vector3Zero(), (Vector3){100.f,0.f,0.f}, BLUE);
           rlDisableBackfaceCulling();
           // can calculate rotation with dot product
-          Vector3 diffvec = Vector3Subtract(camera.position, mappedPos);
+          Vector3 diffvec = Vector3Subtract(ViewCamera->position, mappedPos);
           Vector3 xydiff = Vector3Multiply((Vector3){1, 1, 0}, diffvec);
           float xAngle = Vector3Angle(xydiff, (Vector3){1.0f, 0.0f, 0.0f});
-          float yAngle = Vector3Angle(xydiff, (Vector3){0.0f, 1.0f, 0.0f});
+          float zAngle = Vector3Angle(xydiff, (Vector3){0.0f, 1.0f, 0.0f});
           Vector3 scale = Vector3Scale(Vector3One(), 5e-2);
           // printf("%s:\t%f %f %f\n", body->name, xAngle, yAngle, xAngle - yAngle);
           // printf("xy offsets:\t%f %f\n", camera.position.x, camera.position.y);
-          float angle = XorY ? xAngle : yAngle;
+          float angle = XorZ ? xAngle : zAngle;
+          rlPushMatrix();
+          // rlRotatef(90,1,0,0); // rotate plane to be vertical not flat on floor
           DrawModelEx(plane, Vector3Add(mappedPos, (Vector3){0, 0, body->radius * remap * 1.5f}),
-                      (Vector3){0.0f, 0.0f, 1.0f}, angle * RAD2DEG, scale, WHITE);
+                      (Vector3){1.0f, 0.0f, 0.0f}, angle * RAD2DEG, scale, WHITE);
           // tint is white because tint is multiplied with diffuse color
+          rlPopMatrix();
           rlEnableBackfaceCulling();
         }
         DrawSphere(mappedPos, body->radius * remap, body->color);
-        // printf("mapped pos: %f %f %f, radius: %f \n", mappedPos.x,
-        // mappedPos.y, mappedPos.z,remap*body->radius); draw trail
         // TODO: fix drawing after circular overwrite
         if (trails) {
           size_t start = body->trail.start;
@@ -480,10 +501,14 @@ void UpdateDrawFrame(void) {
             j = (j + start) % len;
             Vector3 pos1 = body->trail.data[j];
             Vector3 pos2 = body->trail.data[(j + 1) % len];
-            DrawLine3D(pos1, pos2, body->color);
+            Vector3 OffsetPos1 = Vector3Subtract(pos1,CentrePlanet->pos);
+            Vector3 OffsetPos2 = Vector3Subtract(pos2,CentrePlanet->pos);
+            Vector3 mappedPos1 = Vector3Scale(OffsetPos1,remap); 
+            Vector3 mappedPos2 = Vector3Scale(OffsetPos2,remap); 
+            DrawLine3D(mappedPos1, mappedPos2, body->color);
           }
         }
-        EndMode3D();
+        rlFPCameraEndMode3D();
       }
       // t ^ 2 = k *a ^ 3
       // k=t^2/a^3 = (365*3600*24)^2/(AU)^3 = 2.9704e-19
