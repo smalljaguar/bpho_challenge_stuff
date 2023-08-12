@@ -8,6 +8,10 @@
 
 #include "rlFPCamera/rlFPCamera.h"
 
+#define RAYGUI_IMPLEMENTATION
+
+#include "raygui.h"
+
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define clamp(a, b, c) (max(b, min(a, c)))
@@ -159,12 +163,12 @@ RenderTexture2D target;
 Model plane;
 bool XorZ = false;
 bool spiro = false;
-int spiroStep = 10;
+int spiroStep = 2;
 bool help = true;
 bool axes = true;
 bool paused = false;
 bool trails = false;
-
+bool cursorState = false;
 Vector3 StartPosition;
 float fovy;
 rlFPCamera camera;
@@ -292,11 +296,31 @@ Planet pluto = {
 Body *bodies[] = {&sun,    &mercury, &venus,  &earth,  &moon,    &mars, &phobos,
                   &deimos, &jupiter, &saturn, &uranus, &neptune, &pluto};
 size_t bodycnt = sizeof(bodies) / sizeof(bodies[0]);
+
+int centrePlanetDropdownActive = 0;
+bool centrePlanetDropdownEditMode = false;
+
+Body *firstSpiroPlanet;
+int firstSpiroDropdownActive = 0;
+bool firstSpiroDropdownEditMode = false;
+
+Body *secondSpiroPlanet;
+int secondSpiroDropdownActive = 0;
+bool secondSpiroDropdownEditMode = false;
+
+
 Planet *CentrePlanet = &sun;
 Vector3 starPos[100] = {0};
+#ifdef PLATFORM_WEB
+  int width = 1200;
+  int height = 500;
+#else
+  int width = 1900;
+  int height = 900;
+#endif
 int main(void) {
   SetConfigFlags(FLAG_MSAA_4X_HINT);
-  InitWindow(1900, 900, "raylib planets - basic demo");
+  InitWindow(width, height, "raylib planets - basic demo");
   // skybox
   // https://github.com/petrocket/spacescape
   // Mesh cube = GenMeshCube(1.0f, 1.0f, 1.0f);
@@ -321,7 +345,6 @@ int main(void) {
         (float)((rand() % 2 == 0) ? -1 : 1) * rand_interval(minStarDist, 1.5 * minStarDist),
         (float)((rand() % 2 == 0) ? -1 : 1) * rand_interval(minStarDist, 1.5 * minStarDist),
         (float)((rand() % 2 == 0) ? -1 : 1) * rand_interval(minStarDist, 1.5 * minStarDist)};
-    printf("%.1f %.1f %.1f\n", starPos[i].x, starPos[i].y, starPos[i].z);
   }
   Vector3 StartPosition = (Vector3){1.0f, 0.0f, 0.0f}; // Camera position
   float fovy = 45.0f;                                  // Camera field-of-view Y
@@ -385,9 +408,11 @@ void UpdateDrawFrame(void) {
   // https://www.shadertoy.com/view/Md2SR3
   // https://github.com/raysan5/raylib/blob/bc9c06325481c0b4b5a2db3b2a8281465569ba3e/examples/models/models_skybox.c
 
-  ClearBackground(BLACK);
+  ClearBackground(RAYWHITE);
   // If you change ClearBackground col, make sure to change the text color
+  if (!cursorState){
   rlFPCameraUpdate(&camera);
+}
   if (GetMouseWheelMove() != 0) {
     ViewCamera->fovy += GetMouseWheelMove();
     ViewCamera->fovy = clamp(355, 1, ViewCamera->fovy);
@@ -395,7 +420,6 @@ void UpdateDrawFrame(void) {
   if (IsKeyPressed(KEY_R)) {
     camera.CameraPosition = StartPosition;
     ViewCamera->target = Vector3Zero();
-    printf("fovy: %f\n", ViewCamera->fovy);
     // ViewCamera->fovy = fovy;
     dt = 10000.;
     CentrePlanet = &sun;
@@ -432,7 +456,41 @@ void UpdateDrawFrame(void) {
     camera.CameraPosition = (Vector3){0, 20, 0};
     ViewCamera->target = (Vector3){0, 19, 0};
   }
+  if (IsKeyPressed(KEY_K)){
+    if (!cursorState){
+    ShowCursor();
+    EnableCursor();
+    }
+    else
+    {
+    HideCursor();
+    DisableCursor();
+    }
+    cursorState = !cursorState;
+  }
+  const char* bodylist = "Sun;Mercury;Venus;Earth;Moon;Mars;Jupiter;Saturn;Uranus;Neptune;Pluto";
+  GuiUnlock();
+  GuiSetStyle(DROPDOWNBOX,TEXT_ALIGNMENT,TEXT_ALIGN_CENTER);
+  DrawText("Centre Planet:",width-200,20,20,BLACK);
+  if (GuiDropdownBox((Rectangle){width-200,40,125,30},bodylist,&centrePlanetDropdownActive,centrePlanetDropdownEditMode))
+  {
+    centrePlanetDropdownEditMode = !centrePlanetDropdownEditMode;
+    CentrePlanet = bodies[centrePlanetDropdownActive]; 
+  }
+  DrawText("Spirograph Planets:",width-500,20,20,BLACK);
+  if (GuiDropdownBox((Rectangle){width-500,40,125,30},bodylist,&firstSpiroDropdownActive,firstSpiroDropdownEditMode)){
+    firstSpiroDropdownEditMode = !firstSpiroDropdownEditMode;
+    firstSpiroPlanet = bodies[firstSpiroDropdownActive];
+  }
+  if (GuiDropdownBox((Rectangle){width-500,80,125,30},bodylist,&secondSpiroDropdownActive,secondSpiroDropdownEditMode)){
+    secondSpiroDropdownEditMode = !secondSpiroDropdownEditMode;
+    secondSpiroPlanet = bodies[secondSpiroDropdownActive];
+  }
+  GuiLock();
 
+if (!paused){
+    frameCnt++;
+  }
   for (size_t subiter = 0; subiter < subLim * (size_t)(dt / 10000.); subiter++) {
     if (subiter == 0) {
       // prevent drawing once per Body by drawing outside of body loop
@@ -458,7 +516,6 @@ void UpdateDrawFrame(void) {
     rlFPCameraBeginMode3D(&camera);
     if (!paused) {
       currTime += dt;
-      frameCnt++;
     }
     if (axes) {
       DrawGrid(10, 1.0f);
@@ -467,7 +524,7 @@ void UpdateDrawFrame(void) {
       DrawLine3D(Vector3Zero(), (Vector3){1000.f, 0, 0}, BLUE);
     }
     for (int i = 0; i < 100; i++) {
-      DrawSphere(starPos[i], 1, WHITE);
+      // DrawSphere(starPos[i], 1, WHITE);
     }
     for (size_t i = 0; i < bodycnt; i++) {
       Planet *body = bodies[i];
@@ -487,7 +544,6 @@ void UpdateDrawFrame(void) {
 
       // add to trail (should it be every frame or subiter?)
       if (!paused) {
-        if (frameCnt % 10 == 0) {
           body->trail.data[body->trail.pos] = body->pos;
 
           // circular!
@@ -504,7 +560,6 @@ void UpdateDrawFrame(void) {
           if (body->trail.start >= body->trail.len - 1) {
             body->trail.start = 0;
           }
-        }
       }
       if (subiter == 0) {
         // rotate to match orbital plane
@@ -551,8 +606,8 @@ void UpdateDrawFrame(void) {
             Vector3 mappedPos1 = Vector3Scale(OffsetPos1, remap);
             Vector3 mappedPos2 = Vector3Scale(OffsetPos2, remap);
             DrawLine3D(mappedPos1, mappedPos2, body->color);
-            if (spiro && body == &jupiter && (j % spiroStep == 0)) {
-              Vector3 otherPos = (&mars)->trail.data[j];
+            if (spiro && body == firstSpiroPlanet && (j % spiroStep == 0)) {
+              Vector3 otherPos = secondSpiroPlanet->trail.data[j];
               Vector3 offsetOtherPos = Vector3Subtract(otherPos, CentrePlanet->trail.data[j]);
               Vector3 mappedOtherPos = Vector3Scale(offsetOtherPos, remap);
               DrawLine3D(mappedPos1, mappedOtherPos, GREEN);
@@ -568,12 +623,8 @@ void UpdateDrawFrame(void) {
         printf("body:%s has T (in years) of:%1f\n", body->name, T / 3600. / 24. / 365.);
       }
       if (T != 0 && !paused) { // don't divide by 0 (Sun)
-        float curr_theta = body->theta;
         // body->theta += dt / T / (subLim * (size_t)(dt / 10000.)) * 2 * PI;
         body->theta += (dt / T) / subLim * 2 * PI;
-        if (body->theta > 2 * PI && curr_theta < 2 * PI) {
-          printf("body:%s has completed first orbit!\n", body->name, currTime);
-        }
       }
     }
     // draw spirograph between 2 planets
