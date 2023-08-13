@@ -6,9 +6,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 #include "rlFPCamera/rlFPCamera.h"
 
 #define RAYGUI_IMPLEMENTATION
+
 
 #include "raygui.h"
 
@@ -163,6 +166,7 @@ RenderTexture2D target;
 Model plane;
 bool XorZ = false;
 bool spiro = false;
+int InnerorOuter = 0;
 int spiroStep = 2;
 bool help = true;
 bool axes = true;
@@ -465,6 +469,9 @@ void UpdateDrawFrame(void) {
     }
     cursorState = !cursorState;
   }
+  if (IsKeyPressed(KEY_I)){
+    InnerorOuter = (InnerorOuter + 1) % 3;
+  }
   const char *bodylist = "Sun;Mercury;Venus;Earth;Moon;Mars;Jupiter;Saturn;Uranus;Neptune;Pluto";
   GuiUnlock();
   GuiSetStyle(DROPDOWNBOX, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
@@ -580,8 +587,9 @@ void UpdateDrawFrame(void) {
         */
         // tint is white because tint is multiplied with diffuse color
         rlEnableBackfaceCulling();
-
+        if (body == &sun || InnerorOuter == 0 || (InnerorOuter == 1 && (body == &mercury || body == &venus || body == &earth || body == &moon || body == &mars || body == &phobos || body == &deimos) ) || (InnerorOuter == 2 && (body == &jupiter || body == &saturn || body == &uranus || body == &neptune || body == &pluto)) ){
         DrawSphere(mappedPos, body->radius * remap, body->color);
+        }
         // TODO: fix drawing after circular overwrite
         if (trails) {
           size_t start = body->trail.start;

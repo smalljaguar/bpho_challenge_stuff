@@ -90,8 +90,8 @@ for name, period, eccentricity in zip(names, periods, eccentricities):
     fig = px.line(data, y=x[stepsize::stepsize], x=data.columns, title=name)
     fig.update_yaxes(title_text="Angle (Radians)")
     fig.update_xaxes(title_text="Time (Earth Years)")
-    fig.show()
-    fig.write_html(f"{name}.html")
+    # fig.show()
+    fig.write_html(f"docs/{name}.html",include_plotlyjs='cdn')
     # plot I_trap,I_simp, against x
 with open("exoplanet.eu_catalog.csv") as exocsv:
     reader = DictReader(exocsv)
@@ -194,8 +194,8 @@ solar_scatter.update_layout(
     ]
 )
 solar_scatter.show()
-fig.show()
-fig.write_html("plotly_out.html")
+# fig.show()
+fig.write_html("plotly_out.html",include_plotlyjs='cdn')
 print(np.corrcoef(periods, corrected_semi_majors)[0, 1])  # r^2 = 0.999999498!
 
 for planet in planets:
