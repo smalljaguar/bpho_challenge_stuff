@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8"/>
+    <link rel="stylesheet" href="styles.css" />
+    <title> BPhO computational physics challenge </title>
+    <style>
+#planetDropdown {
+    margin: 20px;
+    padding: 10px 20px; /* Increase padding for larger size */
+    font-size: 16px; /* Increase font size for larger size */
+    width: 200px; /* Set a fixed width for the dropdown */
+  }
+
+  #planetFrame {
+    width: 100%;
+    max-width: 1000px; /* Adjust maximum width as needed */
+    height: 700px;
+    border: none;
+  }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <ul class="navbar">
+      <li><a href="challenge1.html">Challenge 1: Kepler's 3rd Law</a></li>
+      <li><a href="challenge5.html">Challenge 5: Orbit angle vs Time </a></li>
+      <li><a href="kepler_3d.html">Challenge 2,3,4,6,7: Solar System Environment</a></li>
+      <li><a href="about.html">About Me</a></li>
+      <li><a href="https://github.com/smalljaguar/bpho_challenge_stuff">Source code on Github</a></li>
+      </ul>
+    </nav>
+  <h1>
+   Challenge 5: Angle of Planets over time accounting for eccentricity and inclination 
+  </h1>
+  <select id="planetDropdown">
+  <option value="mercury">Mercury</option>
+  <option value="venus">Venus</option>
+  <option value="earth">Earth</option>
+  <option value="mars">Mars</option>
+  <option value="jupiter">Jupiter</option>
+  <option value="saturn">Saturn</option>
+  <option value="uranus">Uranus</option>
+  <option value="neptune">Neptune</option>
+  <option value="pluto">Pluto</option>
+</select>
+
+<iframe id="planetFrame" src="" frameborder="0"></iframe>
+
+<script>
+  const planetDropdown = document.getElementById("planetDropdown");
+  const planetFrame = document.getElementById("planetFrame");
+
+  planetDropdown.addEventListener("change", function() {
+    const selectedPlanet = planetDropdown.value;
+    const planetHtmlURL = `${selectedPlanet}.html`;
+    planetFrame.src = planetHtmlURL;
+  });
+</script>
+  </body>
+</html>

@@ -308,15 +308,14 @@ Body *secondSpiroPlanet;
 int secondSpiroDropdownActive = 0;
 bool secondSpiroDropdownEditMode = false;
 
-
 Planet *CentrePlanet = &sun;
 Vector3 starPos[100] = {0};
 #ifdef PLATFORM_WEB
-  int width = 1200;
-  int height = 500;
+int width = 1200;
+int height = 500;
 #else
-  int width = 1900;
-  int height = 900;
+int width = 1900;
+int height = 900;
 #endif
 int main(void) {
   SetConfigFlags(FLAG_MSAA_4X_HINT);
@@ -410,9 +409,9 @@ void UpdateDrawFrame(void) {
 
   ClearBackground(RAYWHITE);
   // If you change ClearBackground col, make sure to change the text color
-  if (!cursorState){
-  rlFPCameraUpdate(&camera);
-}
+  if (!cursorState) {
+    rlFPCameraUpdate(&camera);
+  }
   if (GetMouseWheelMove() != 0) {
     ViewCamera->fovy += GetMouseWheelMove();
     ViewCamera->fovy = clamp(355, 1, ViewCamera->fovy);
@@ -456,39 +455,39 @@ void UpdateDrawFrame(void) {
     camera.CameraPosition = (Vector3){0, 20, 0};
     ViewCamera->target = (Vector3){0, 19, 0};
   }
-  if (IsKeyPressed(KEY_K)){
-    if (!cursorState){
-    ShowCursor();
-    EnableCursor();
-    }
-    else
-    {
-    HideCursor();
-    DisableCursor();
+  if (IsKeyPressed(KEY_K)) {
+    if (!cursorState) {
+      ShowCursor();
+      EnableCursor();
+    } else {
+      HideCursor();
+      DisableCursor();
     }
     cursorState = !cursorState;
   }
-  const char* bodylist = "Sun;Mercury;Venus;Earth;Moon;Mars;Jupiter;Saturn;Uranus;Neptune;Pluto";
+  const char *bodylist = "Sun;Mercury;Venus;Earth;Moon;Mars;Jupiter;Saturn;Uranus;Neptune;Pluto";
   GuiUnlock();
-  GuiSetStyle(DROPDOWNBOX,TEXT_ALIGNMENT,TEXT_ALIGN_CENTER);
-  DrawText("Centre Planet:",width-200,20,20,BLACK);
-  if (GuiDropdownBox((Rectangle){width-200,40,125,30},bodylist,&centrePlanetDropdownActive,centrePlanetDropdownEditMode))
-  {
+  GuiSetStyle(DROPDOWNBOX, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
+  DrawText("Centre Planet:", width - 200, 20, 20, BLACK);
+  if (GuiDropdownBox((Rectangle){width - 200, 40, 125, 30}, bodylist, &centrePlanetDropdownActive,
+                     centrePlanetDropdownEditMode)) {
     centrePlanetDropdownEditMode = !centrePlanetDropdownEditMode;
-    CentrePlanet = bodies[centrePlanetDropdownActive]; 
+    CentrePlanet = bodies[centrePlanetDropdownActive];
   }
-  DrawText("Spirograph Planets:",width-500,20,20,BLACK);
-  if (GuiDropdownBox((Rectangle){width-500,40,125,30},bodylist,&firstSpiroDropdownActive,firstSpiroDropdownEditMode)){
+  DrawText("Spirograph Planets:", width - 500, 20, 20, BLACK);
+  if (GuiDropdownBox((Rectangle){width - 500, 40, 125, 30}, bodylist, &firstSpiroDropdownActive,
+                     firstSpiroDropdownEditMode)) {
     firstSpiroDropdownEditMode = !firstSpiroDropdownEditMode;
     firstSpiroPlanet = bodies[firstSpiroDropdownActive];
   }
-  if (GuiDropdownBox((Rectangle){width-500,80,125,30},bodylist,&secondSpiroDropdownActive,secondSpiroDropdownEditMode)){
+  if (GuiDropdownBox((Rectangle){width - 500, 80, 125, 30}, bodylist, &secondSpiroDropdownActive,
+                     secondSpiroDropdownEditMode)) {
     secondSpiroDropdownEditMode = !secondSpiroDropdownEditMode;
     secondSpiroPlanet = bodies[secondSpiroDropdownActive];
   }
   GuiLock();
 
-if (!paused){
+  if (!paused) {
     frameCnt++;
   }
   for (size_t subiter = 0; subiter < subLim * (size_t)(dt / 10000.); subiter++) {
@@ -544,22 +543,22 @@ if (!paused){
 
       // add to trail (should it be every frame or subiter?)
       if (!paused) {
-          body->trail.data[body->trail.pos] = body->pos;
+        body->trail.data[body->trail.pos] = body->pos;
 
-          // circular!
-          if (body->trail.pos >= body->trail.len - 1) {
-            body->trail.start++;
-            body->trail.pos = 0;
-          } else {
-            body->trail.pos++;
-          }
-          if (body->trail.start != 0) {
-            // overwriting old trails
-            body->trail.start++;
-          }
-          if (body->trail.start >= body->trail.len - 1) {
-            body->trail.start = 0;
-          }
+        // circular!
+        if (body->trail.pos >= body->trail.len - 1) {
+          body->trail.start++;
+          body->trail.pos = 0;
+        } else {
+          body->trail.pos++;
+        }
+        if (body->trail.start != 0) {
+          // overwriting old trails
+          body->trail.start++;
+        }
+        if (body->trail.start >= body->trail.len - 1) {
+          body->trail.start = 0;
+        }
       }
       if (subiter == 0) {
         // rotate to match orbital plane
@@ -605,7 +604,9 @@ if (!paused){
             Vector3 OffsetPos2 = Vector3Subtract(pos2, CentrePlanet->trail.data[(j + 1) % len]);
             Vector3 mappedPos1 = Vector3Scale(OffsetPos1, remap);
             Vector3 mappedPos2 = Vector3Scale(OffsetPos2, remap);
-            DrawLine3D(mappedPos1, mappedPos2, body->color);
+            if (!spiro || body == firstSpiroPlanet || body == secondSpiroPlanet) {
+              DrawLine3D(mappedPos1, mappedPos2, body->color);
+            }
             if (spiro && body == firstSpiroPlanet && (j % spiroStep == 0)) {
               Vector3 otherPos = secondSpiroPlanet->trail.data[j];
               Vector3 offsetOtherPos = Vector3Subtract(otherPos, CentrePlanet->trail.data[j]);

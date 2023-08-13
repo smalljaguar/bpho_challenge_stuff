@@ -91,7 +91,7 @@ for name, period, eccentricity in zip(names, periods, eccentricities):
     fig.update_yaxes(title_text="Angle (Radians)")
     fig.update_xaxes(title_text="Time (Earth Years)")
     fig.show()
-    break
+    fig.write_html(f"{name}.html")
     # plot I_trap,I_simp, against x
 with open("exoplanet.eu_catalog.csv") as exocsv:
     reader = DictReader(exocsv)
@@ -158,6 +158,7 @@ fig.update_yaxes(
     title_text="Orbit Period in Earth days (logarithmic)", type="log", row=1, col=1
 )
 fig.update_traces(textposition="top center", row=1, col=1)
+fig.update_traces(textposition="top center", row=1, col=2)
 
 solar_scatter.update_layout(
     updatemenus=[
@@ -193,8 +194,8 @@ solar_scatter.update_layout(
     ]
 )
 solar_scatter.show()
-# fig.show()
-# fig.write_html("plotly_out.html")
+fig.show()
+fig.write_html("plotly_out.html")
 print(np.corrcoef(periods, corrected_semi_majors)[0, 1])  # r^2 = 0.999999498!
 
 for planet in planets:
