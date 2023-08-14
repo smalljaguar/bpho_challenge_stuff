@@ -162,12 +162,13 @@ float currTime = 0;
 unsigned int frameCnt = 0;
 const size_t subLim = 1; // steps per frame
 float remap = 1e-8;
+float radiusRemap = 1;
 RenderTexture2D target;
 Model plane;
 bool XorZ = false;
 bool spiro = false;
 int InnerorOuter = 0;
-int spiroStep = 2;
+int spiroStep = 10;
 bool help = true;
 bool axes = true;
 bool paused = false;
@@ -456,8 +457,8 @@ void UpdateDrawFrame(void) {
   }
   if (IsKeyPressed(KEY_O)) {
     // topdown
-    camera.CameraPosition = (Vector3){0, 20, 0};
-    ViewCamera->target = (Vector3){0, 19, 0};
+    camera.CameraPosition = (Vector3){0, 10, 0};
+    ViewCamera->target = (Vector3){0, 9, 0};
   }
   if (IsKeyPressed(KEY_K)) {
     if (!cursorState) {
@@ -471,6 +472,11 @@ void UpdateDrawFrame(void) {
   }
   if (IsKeyPressed(KEY_I)){
     InnerorOuter = (InnerorOuter + 1) % 3;
+    if (InnerorOuter == 2){
+     radiusRemap = .35;
+    }else{
+      radiusRemap = 1;
+    }
   }
   const char *bodylist = "Sun;Mercury;Venus;Earth;Moon;Mars;Jupiter;Saturn;Uranus;Neptune;Pluto";
   GuiUnlock();
@@ -546,7 +552,7 @@ void UpdateDrawFrame(void) {
       }
       body->pos = pos;
       Vector3 OffsetPos = Vector3Subtract(pos, CentrePlanet->pos);
-      Vector3 mappedPos = Vector3Scale(OffsetPos, remap);
+      Vector3 mappedPos = Vector3Scale(OffsetPos, remap*radiusRemap);
 
       // add to trail (should it be every frame or subiter?)
       if (!paused) {
@@ -589,7 +595,7 @@ void UpdateDrawFrame(void) {
         rlEnableBackfaceCulling();
         if (body == &sun || InnerorOuter == 0 || (InnerorOuter == 1 && (body == &mercury || body == &venus || body == &earth || body == &moon || body == &mars || body == &phobos || body == &deimos) ) || (InnerorOuter == 2 && (body == &jupiter || body == &saturn || body == &uranus || body == &neptune || body == &pluto)) ){
         DrawSphere(mappedPos, body->radius * remap, body->color);
-        }
+        
         // TODO: fix drawing after circular overwrite
         if (trails) {
           size_t start = body->trail.start;
@@ -610,18 +616,19 @@ void UpdateDrawFrame(void) {
             // Vector3 OffsetPos2 = Vector3Subtract(pos2,CentrePlanet->pos);
             Vector3 OffsetPos1 = Vector3Subtract(pos1, CentrePlanet->trail.data[j]);
             Vector3 OffsetPos2 = Vector3Subtract(pos2, CentrePlanet->trail.data[(j + 1) % len]);
-            Vector3 mappedPos1 = Vector3Scale(OffsetPos1, remap);
-            Vector3 mappedPos2 = Vector3Scale(OffsetPos2, remap);
+            Vector3 mappedPos1 = Vector3Scale(OffsetPos1, remap*radiusRemap);
+            Vector3 mappedPos2 = Vector3Scale(OffsetPos2, remap*radiusRemap);
             if (!spiro || body == firstSpiroPlanet || body == secondSpiroPlanet) {
               DrawLine3D(mappedPos1, mappedPos2, body->color);
             }
             if (spiro && body == firstSpiroPlanet && (j % spiroStep == 0)) {
               Vector3 otherPos = secondSpiroPlanet->trail.data[j];
               Vector3 offsetOtherPos = Vector3Subtract(otherPos, CentrePlanet->trail.data[j]);
-              Vector3 mappedOtherPos = Vector3Scale(offsetOtherPos, remap);
+              Vector3 mappedOtherPos = Vector3Scale(offsetOtherPos, remap*radiusRemap);
               DrawLine3D(mappedPos1, mappedOtherPos, GREEN);
             }
           }
+        }
         }
       }
       // t ^ 2 = k *a ^ 3
